@@ -58,3 +58,7 @@ Keep the build passing before merging.
 ## License
 
 MIT
+---
+
+## Error Handling
+This project implements a centralized error-handling system to ensure consistent and secure API responses. Detailed documentation on error classes, response shapes, and usage can be found in [docs/backend/error-handling.md](./docs/backend/error-handling.md).
