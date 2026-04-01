@@ -1,221 +1,107 @@
 /**
- * TalentTrust API — entry point.
+ * @module index
+ * @description Server entry point.
  *
- * Wires the Express application, initialises the SQLite persistence layer via
- * the database singleton, mounts all route groups, and exposes an ops endpoint
- * for the Stellar RPC circuit breaker.
- *
- * Environment variables:
- *   PORT             — HTTP port to bind (default: 3001)
- *   DB_PATH          — Path to the SQLite file (default: talenttrust.db)
- *   STELLAR_RPC_URL  — Stellar/Soroban RPC endpoint (default: soroban-testnet)
+ * Bootstraps the Express application and binds it to a port.
+ * Import `createApp` from `./app` in tests — never import this file directly
+ * in test suites, as it starts the HTTP server immediately.
  */
 
-import express, { Request, Response, NextFunction } from "express";
-import { getDb } from "./db/database";
-import { ContractRepository } from "./repositories/contractRepository";
-import { UserRepository } from "./repositories/userRepository";
-import type { ContractStatus } from "./db/types";
-import { stellarClient } from "./rpc/stellarClient";
-import { CircuitOpenError } from "./circuit-breaker";
+import { createApp } from './app';
 
-const app = express();
-const PORT = process.env["PORT"] ?? 3001;
-
-app.use(express.json());
-
-// ── Initialise database singleton (runs migrations) ──────────────────────────
-const db = getDb();
-const contracts = new ContractRepository(db);
-const users = new UserRepository(db);
-
-// ── Health ───────────────────────────────────────────────────────────────────
-
-app.get("/health", (_req: Request, res: Response) => {
-  res.json({ status: "ok", service: "talenttrust-backend" });
-});
+const PORT = process.env.PORT || 3001;
+const app = createApp();
 
 /**
- * GET /api/v1/circuit-breaker/status
- * Returns live state and counters of the Stellar RPC circuit breaker.
- * Use this for ops dashboards and health monitoring.
+ * Enqueue a background job
+ * POST /api/v1/jobs
+ * Body: { type: JobType, payload: JobPayload, options?: { priority, delay } }
  */
-app.get("/api/v1/circuit-breaker/status", (_req: Request, res: Response) => {
-  res.json({ circuitBreaker: stellarClient.getCircuitStats() });
-});
-
-// ── Contracts ────────────────────────────────────────────────────────────────
-
-/**
- * GET /api/v1/contracts
- * Returns all contracts.
- */
-app.get("/api/v1/contracts", (_req: Request, res: Response) => {
-  res.json({ contracts: contracts.findAll() });
-});
-
-/**
- * GET /api/v1/contracts/:id
- * Returns a single contract by ID.
- */
-app.get("/api/v1/contracts/:id", (req: Request, res: Response) => {
-  const contract = contracts.findById(req.params["id"] ?? "");
-  if (!contract) {
-    res.status(404).json({ error: "Contract not found" });
-    return;
-  }
-  res.json({ contract });
-});
-
-/**
- * POST /api/v1/contracts
- * Creates a new contract.
- * Body: { title, clientId, freelancerId, amount, status? }
- */
-app.post("/api/v1/contracts", (req: Request, res: Response) => {
-  const { title, clientId, freelancerId, amount, status } = req.body as {
-    title?: string;
-    clientId?: string;
-    freelancerId?: string;
-    amount?: number;
-    status?: ContractStatus;
-  };
-
-  if (!title || !clientId || !freelancerId || amount === undefined) {
-    res.status(400).json({
-      error: "title, clientId, freelancerId, and amount are required",
-    });
-    return;
-  }
-
+app.post('/api/v1/jobs', async (req: Request, res: Response) => {
   try {
-    const contract = contracts.create({
-      title,
-      clientId,
-      freelancerId,
-      amount,
-      status,
-    });
-    res.status(201).json({ contract });
-  } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
-  }
-});
+    const { type, payload, options } = req.body;
 
-/**
- * PATCH /api/v1/contracts/:id/status
- * Updates the status of an existing contract.
- * Body: { status }
- */
-app.patch("/api/v1/contracts/:id/status", (req: Request, res: Response) => {
-  const { status } = req.body as { status?: ContractStatus };
-  if (!status) {
-    res.status(400).json({ error: "status is required" });
-    return;
-  }
-
-  try {
-    const contract = contracts.updateStatus(req.params["id"] ?? "", status);
-    if (!contract) {
-      res.status(404).json({ error: "Contract not found" });
-      return;
+    if (!type || !payload) {
+      return res.status(400).json({ error: 'Job type and payload are required' });
     }
-    res.json({ contract });
-  } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
+
+    if (!Object.values(JobType).includes(type)) {
+      return res.status(400).json({ error: `Invalid job type: ${type}` });
+    }
+
+    const jobId = await queueManager.addJob(type, payload, options);
+    res.status(201).json({ jobId, type, status: 'queued' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: `Failed to enqueue job: ${message}` });
   }
 });
 
 /**
- * DELETE /api/v1/contracts/:id
- * Deletes a contract.
+ * Get job status
+ * GET /api/v1/jobs/:type/:jobId
  */
-app.delete("/api/v1/contracts/:id", (req: Request, res: Response) => {
-  const deleted = contracts.delete(req.params["id"] ?? "");
-  if (!deleted) {
-    res.status(404).json({ error: "Contract not found" });
-    return;
-  }
-  res.status(204).send();
-});
-
-// ── Users ────────────────────────────────────────────────────────────────────
-
-/**
- * GET /api/v1/users
- * Returns all users.
- */
-app.get("/api/v1/users", (_req: Request, res: Response) => {
-  res.json({ users: users.findAll() });
-});
-
-/**
- * GET /api/v1/users/:id
- * Returns a single user by ID.
- */
-app.get("/api/v1/users/:id", (req: Request, res: Response) => {
-  const user = users.findById(req.params["id"] ?? "");
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
-  res.json({ user });
-});
-
-/**
- * POST /api/v1/users
- * Creates a new user.
- * Body: { username, email, role }
- */
-app.post("/api/v1/users", (req: Request, res: Response) => {
-  const { username, email, role } = req.body as {
-    username?: string;
-    email?: string;
-    role?: string;
-  };
-
-  if (!username || !email || !role) {
-    res.status(400).json({ error: "username, email, and role are required" });
-    return;
-  }
-
+app.get('/api/v1/jobs/:type/:jobId', async (req: Request, res: Response) => {
   try {
-    const user = users.create({
-      username,
-      email,
-      role: role as "client" | "freelancer" | "both",
-    });
-    res.status(201).json({ user });
-  } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
+    const { type, jobId } = req.params;
+
+    if (!Object.values(JobType).includes(type as JobType)) {
+      return res.status(400).json({ error: `Invalid job type: ${type}` });
+    }
+
+    const status = await queueManager.getJobStatus(type as JobType, jobId);
+    
+    if (!status) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    res.json(status);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: `Failed to get job status: ${message}` });
   }
 });
 
 /**
- * DELETE /api/v1/users/:id
- * Deletes a user.
+ * Initialize queues on startup
  */
-app.delete("/api/v1/users/:id", (req: Request, res: Response) => {
-  const deleted = users.delete(req.params["id"] ?? "");
-  if (!deleted) {
-    res.status(404).json({ error: "User not found" });
-    return;
+async function initializeQueues() {
+  console.log('Initializing background job queues...');
+  
+  for (const jobType of Object.values(JobType)) {
+    await queueManager.initializeQueue(jobType);
+    console.log(`Queue initialized: ${jobType}`);
   }
-  res.status(204).send();
-});
+  
+  console.log('All queues initialized successfully');
+}
 
-// ── Global error handler ─────────────────────────────────────────────────────
+/**
+ * Graceful shutdown handler
+ */
+async function gracefulShutdown() {
+  console.log('Received shutdown signal, closing gracefully...');
+  await queueManager.shutdown();
+  process.exit(0);
+}
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error(err.stack);
-  res.status(500).json({ error: "Internal server error" });
-});
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
 
-// ── Start server ─────────────────────────────────────────────────────────────
+/**
+ * Start the server
+ */
+async function startServer() {
+  try {
+    await initializeQueues();
+    
+    app.listen(PORT, () => {
+      console.log(`TalentTrust API listening on http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
 
-app.listen(PORT, () => {
-  console.log(`TalentTrust API listening on http://localhost:${PORT}`);
-});
-
-export { app };
+startServer();
