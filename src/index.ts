@@ -1,51 +1,107 @@
-import express, { Request, Response } from 'express';
-import { TransactionPoller, IBlockchainProvider } from './services/TransactionPoller';
-import { transactionsDb } from './models/Transaction';
+/**
+ * @module index
+ * @description Server entry point.
+ *
+ * Bootstraps the Express application and binds it to a port.
+ * Import `createApp` from `./app` in tests — never import this file directly
+ * in test suites, as it starts the HTTP server immediately.
+ */
 
-const app = express();
+import { createApp } from './app';
+
 const PORT = process.env.PORT || 3001;
+const app = createApp();
 
-// Mock provider for demonstration purposes
-const mockProvider: IBlockchainProvider = {
-  getTransactionReceipt: async (hash: string) => {
-    console.log(`Checking receipt for hash: ${hash}`);
-    // Simulating a random success/failure or pending status
-    return null; // Always pending in this mock
+/**
+ * Enqueue a background job
+ * POST /api/v1/jobs
+ * Body: { type: JobType, payload: JobPayload, options?: { priority, delay } }
+ */
+app.post('/api/v1/jobs', async (req: Request, res: Response) => {
+  try {
+    const { type, payload, options } = req.body;
+
+    if (!type || !payload) {
+      return res.status(400).json({ error: 'Job type and payload are required' });
+    }
+
+    if (!Object.values(JobType).includes(type)) {
+      return res.status(400).json({ error: `Invalid job type: ${type}` });
+    }
+
+    const jobId = await queueManager.addJob(type, payload, options);
+    res.status(201).json({ jobId, type, status: 'queued' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: `Failed to enqueue job: ${message}` });
   }
-};
-
-const transactionPoller = new TransactionPoller(mockProvider);
-
-app.use(express.json());
-
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', service: 'talenttrust-backend' });
 });
 
-app.post('/api/v1/transactions', async (req: Request, res: Response) => {
-  const { hash } = req.body;
-  if (!hash) {
-    return res.status(400).json({ error: 'Transaction hash is required' });
+/**
+ * Get job status
+ * GET /api/v1/jobs/:type/:jobId
+ */
+app.get('/api/v1/jobs/:type/:jobId', async (req: Request, res: Response) => {
+  try {
+    const { type, jobId } = req.params;
+
+    if (!Object.values(JobType).includes(type as JobType)) {
+      return res.status(400).json({ error: `Invalid job type: ${type}` });
+    }
+
+    const status = await queueManager.getJobStatus(type as JobType, jobId);
+    
+    if (!status) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    res.json(status);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: `Failed to get job status: ${message}` });
   }
-
-  await transactionPoller.poll(hash);
-  res.status(202).json({ message: 'Transaction polling started', hash });
 });
 
-app.get('/api/v1/transactions/:hash', (req: Request, res: Response) => {
-  const { hash } = req.params;
-  const transaction = transactionsDb.get(hash);
-  if (!transaction) {
-    return res.status(404).json({ error: 'Transaction not found' });
+/**
+ * Initialize queues on startup
+ */
+async function initializeQueues() {
+  console.log('Initializing background job queues...');
+  
+  for (const jobType of Object.values(JobType)) {
+    await queueManager.initializeQueue(jobType);
+    console.log(`Queue initialized: ${jobType}`);
   }
-  res.json(transaction);
-});
+  
+  console.log('All queues initialized successfully');
+}
 
-app.get('/api/v1/contracts', (_req: Request, res: Response) => {
-  res.json({ contracts: [] });
-});
+/**
+ * Graceful shutdown handler
+ */
+async function gracefulShutdown() {
+  console.log('Received shutdown signal, closing gracefully...');
+  await queueManager.shutdown();
+  process.exit(0);
+}
 
-app.listen(PORT, () => {
-  console.log(`TalentTrust API listening on http://localhost:${PORT}`);
-});
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
 
+/**
+ * Start the server
+ */
+async function startServer() {
+  try {
+    await initializeQueues();
+    
+    app.listen(PORT, () => {
+      console.log(`TalentTrust API listening on http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
