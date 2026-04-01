@@ -321,6 +321,12 @@ Run unit and integration tests to verify these features:
 npm test
 ```
 
+## Secrets Management
+
+TalentTrust Backend follows a strict policy for handling secrets. All sensitive information must be managed through the `SecretsManager`.
+
+For more information, see the [Secrets Handling Documentation](docs/backend/secrets-handling.md).
+
 ## License
 
 MIT
