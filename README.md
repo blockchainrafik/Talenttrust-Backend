@@ -128,6 +128,16 @@ decisions and planned integrations.
 2. Make changes, run `npm run lint && npm run test:ci && npm run build`
 3. Open a pull request — CI runs all four gates automatically
 
+## Database
+
+The backend uses an embedded **SQLite** database (via `better-sqlite3`) — no external service required.
+
+| Environment variable | Default          | Description                                                 |
+| -------------------- | ---------------- | ----------------------------------------------------------- |
+| `DB_PATH`            | `talenttrust.db` | Path to the SQLite file. Use `:memory:` for ephemeral mode. |
+
+Schema migrations run automatically on startup. See [`docs/backend/database.md`](docs/backend/database.md) for full documentation: schema, repository API, configuration, and security notes.
+
 ## License
 
 MIT
