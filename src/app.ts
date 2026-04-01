@@ -1,98 +1,47 @@
-import express, { Express, NextFunction, Request, Response } from 'express';
+/**
+ * @module app
+ * @description Express application factory.
+ *
+ * Separates app configuration from server bootstrap so the app can be
+ * imported in tests without binding to a port.
+ *
+ * @security
+ *  - express.json() body parser is scoped to this app instance only.
+ *  - All routes return JSON; no HTML rendering surface.
+ *  - Helmet-style headers should be added here when the dependency is
+ *    introduced (tracked in docs/backend/security.md).
+ */
 
-import {
-  HealthService,
-  HealthServiceLike,
-  healthReportToHttpStatus,
-} from './observability/health-service';
-import { MetricsService, MetricsServiceLike } from './observability/metrics-service';
-import {
-  ObservabilityConfig,
-  readObservabilityConfig,
-} from './observability/observability-config';
+import express, { Request, Response, NextFunction } from 'express';
+import { healthRouter } from './routes/health';
+import { contractsRouter } from './routes/contracts';
 
 /**
- * Central app assembly so runtime wiring is easy to test without opening sockets.
+ * Creates and configures the Express application.
+ *
+ * @returns Configured Express app instance (not yet listening).
  */
-export interface AppContext {
-  app: Express;
-  config: ObservabilityConfig;
-  healthService: HealthServiceLike;
-  metricsService: MetricsServiceLike;
-}
-
-export interface CreateAppOptions {
-  config?: ObservabilityConfig;
-  healthService?: HealthServiceLike;
-  metricsService?: MetricsServiceLike;
-}
-
-export function createApp(options: CreateAppOptions = {}): AppContext {
-  const config = options.config ?? readObservabilityConfig();
-  const healthService = options.healthService ?? new HealthService(config.serviceName);
-  const metricsService = options.metricsService ?? new MetricsService(config.serviceName);
+export function createApp(): express.Application {
   const app = express();
 
+  // ── Middleware ────────────────────────────────────────────────────────────
   app.use(express.json());
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    metricsService.trackHttpRequest(req, res, next);
+
+  // ── Routes ────────────────────────────────────────────────────────────────
+  app.use('/health', healthRouter);
+  app.use('/api/v1/contracts', contractsRouter);
+
+  // ── 404 handler ──────────────────────────────────────────────────────────
+  app.use((_req: Request, res: Response) => {
+    res.status(404).json({ error: 'Not Found' });
   });
 
-  app.get('/health/live', (_req: Request, res: Response) => {
-    res.json({ status: 'up', service: config.serviceName });
+  // ── Global error handler ─────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+    console.error(err.stack);
+    res.status(500).json({ error: 'Internal Server Error' });
   });
 
-  app.get('/health/ready', async (_req: Request, res: Response) => {
-    const report = await healthService.getReport();
-    metricsService.recordHealthStatus(report.status);
-    res.status(healthReportToHttpStatus(report.status)).json(report);
-  });
-
-  app.get('/health', async (_req: Request, res: Response) => {
-    const report = await healthService.getReport();
-    metricsService.recordHealthStatus(report.status);
-    res.status(healthReportToHttpStatus(report.status)).json(report);
-  });
-
-  app.get('/metrics', async (req: Request, res: Response) => {
-    if (!config.metrics.enabled) {
-      res.status(404).json({ error: 'not_found' });
-      return;
-    }
-
-    if (!hasMetricsAccess(req, config.metrics.authToken)) {
-      res.set('WWW-Authenticate', 'Bearer realm="metrics"');
-      res.status(401).json({ error: 'unauthorized' });
-      return;
-    }
-
-    res.set('Content-Type', metricsService.contentType);
-    res.send(await metricsService.getMetrics());
-  });
-
-  app.get('/api/v1/contracts', (_req: Request, res: Response) => {
-    res.json({ contracts: [] });
-  });
-
-  return {
-    app,
-    config,
-    healthService,
-    metricsService,
-  };
+  return app;
 }
-
-function hasMetricsAccess(req: Request, authToken?: string): boolean {
-  if (!authToken) {
-    return true;
-  }
-
-  const authorization = req.header('authorization');
-  if (!authorization) {
-    return false;
-  }
-
-  const [scheme, token] = authorization.split(' ');
-  return scheme.toLowerCase() === 'bearer' && token === authToken;
-}
-
