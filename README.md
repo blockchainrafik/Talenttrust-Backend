@@ -119,6 +119,9 @@ npm install
 | `npm run lint:fix` | Auto-fix lint issues |
 | `npm run audit:ci` | Fail on HIGH/CRITICAL npm vulnerabilities |
 
+## Documentation
+- [Backend Notification Services](./docs/backend/notifications.md)
+
 ## CI/CD
 
 GitHub Actions runs four gates on every push and pull request to `main`:
