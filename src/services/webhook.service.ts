@@ -1,5 +1,17 @@
 import axios from 'axios';
 
+export interface WebhookPayload {
+  id: string;
+  url: string;
+  data: unknown;
+  retryCount: number;
+}
+
+interface DLQEntry extends WebhookPayload {
+  failedAt: Date;
+  lastError: string;
+}
+
 const MAX_RETRIES = 5;
 const INITIAL_DELAY = 1000; // 1 second
 

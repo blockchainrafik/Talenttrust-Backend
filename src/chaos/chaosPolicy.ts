@@ -1,4 +1,4 @@
-import { AppConfig } from '../config';
+import { AppConfig } from '../appConfiguration';
 
 export type ChaosResult = 'none' | 'error' | 'timeout';
 

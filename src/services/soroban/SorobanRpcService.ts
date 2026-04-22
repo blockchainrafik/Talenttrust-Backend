@@ -1,6 +1,6 @@
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { rpc } from '@stellar/stellar-sdk';
-import { config } from '../../config';
+import { sorobanEnv } from '../../sorobanEnv';
 
 /**
  * Soroban RPC Service
@@ -10,7 +10,7 @@ import { config } from '../../config';
 export class SorobanRpcService {
   private server: rpc.Server;
 
-  constructor(rpcUrl: string = config.sorobanRpcUrl) {
+  constructor(rpcUrl: string = sorobanEnv.sorobanRpcUrl) {
     this.server = new rpc.Server(rpcUrl, { allowHttp: rpcUrl.startsWith('http://') });
   }
 

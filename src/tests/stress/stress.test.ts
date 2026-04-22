@@ -19,12 +19,16 @@ afterAll((done) => {
 });
 describe("Stress Test - All Critical Endpoints", () => {
   it("should degrade gracefully under spike load on /health", async () => {
-    const result = await autocannon({
+    const result = (await autocannon({
       url: "http://localhost:3097/health",
       connections: 100, // 100 concurrent — spike!
       duration: 20,
       method: "GET",
-    });
+    })) as {
+      requests: { average: number; total: number };
+      latency: { p99: number };
+      errors: number;
+    };
 
     console.log("=== STRESS RESULTS /health ===");
     console.log(`RPS: ${result.requests.average}`);
@@ -37,12 +41,15 @@ describe("Stress Test - All Critical Endpoints", () => {
   }, 60000);
 
   it("should degrade gracefully under spike load on /api/v1/contracts", async () => {
-    const result = await autocannon({
+    const result = (await autocannon({
       url: "http://localhost:3097/api/v1/contracts",
       connections: 100,
       duration: 20,
       method: "GET",
-    });
+    })) as {
+      requests: { total: number };
+      errors: number;
+    };
 
     const errorRate = result.errors / result.requests.total;
     expect(errorRate).toBeLessThan(0.05);

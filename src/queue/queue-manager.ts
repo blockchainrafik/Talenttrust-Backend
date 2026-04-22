@@ -132,11 +132,11 @@ export class QueueManager {
       console.error(`[${jobType}] Job ${job?.id} failed:`, error.message);
     });
 
-    queueEvents.on('waiting', ({ jobId }) => {
+    queueEvents.on('waiting', ({ jobId }: { jobId: string | undefined }) => {
       console.log(`[${jobType}] Job ${jobId} is waiting`);
     });
 
-    queueEvents.on('active', ({ jobId }) => {
+    queueEvents.on('active', ({ jobId }: { jobId: string | undefined }) => {
       console.log(`[${jobType}] Job ${jobId} is active`);
     });
   }
@@ -175,6 +175,11 @@ export class QueueManager {
    * Waits for active jobs to complete before closing connections
    */
   public async shutdown(): Promise<void> {
+    if (this.queues.size === 0 && this.workers.size === 0 && this.queueEvents.size === 0) {
+      this.isShuttingDown = false;
+      return;
+    }
+
     if (this.isShuttingDown) {
       return;
     }
@@ -197,6 +202,12 @@ export class QueueManager {
     }
 
     await Promise.all(shutdownPromises);
+
+    this.workers.clear();
+    this.queues.clear();
+    this.queueEvents.clear();
+    this.isShuttingDown = false;
+
     console.log('Queue manager shutdown complete');
   }
 }

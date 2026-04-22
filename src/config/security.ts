@@ -16,7 +16,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
  * @dev Rejects requests from origins not in the allowed pool
  */
 export const corsConfig: CorsOptions = {
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
         // Allow requests with no origin (like server-to-server or curl requests) if desired
         // In this secure baseline, we restrict it unless it matches allowed origins.
         if (!origin || allowedOrigins.indexOf(origin) !== -1) {

@@ -14,7 +14,9 @@
 
 import express, { Request, Response, NextFunction } from 'express';
 import { healthRouter } from './routes/health';
-import { contractsRouter } from './routes/contracts';
+import contractsModuleRouter from './routes/contracts.routes';
+import reputationRouter from './routes/reputation.routes';
+import { requestIdMiddleware } from './middleware/requestId';
 
 /**
  * Creates and configures the Express application.
@@ -26,10 +28,12 @@ export function createApp(): express.Application {
 
   // ── Middleware ────────────────────────────────────────────────────────────
   app.use(express.json());
+  app.use(requestIdMiddleware);
 
   // ── Routes ────────────────────────────────────────────────────────────────
   app.use('/health', healthRouter);
-  app.use('/api/v1/contracts', contractsRouter);
+  app.use('/api/v1/contracts', contractsModuleRouter);
+  app.use('/api/v1/reputation', reputationRouter);
 
   // ── 404 handler ──────────────────────────────────────────────────────────
   app.use((_req: Request, res: Response) => {

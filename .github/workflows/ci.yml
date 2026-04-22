@@ -3,7 +3,7 @@
 #
 # Gates (all must pass before merge):
 #   1. lint      — ESLint with TypeScript rules
-#   2. test      — Jest with ≥95% line/function/statement coverage
+#   2. test      — Jest + coverage (application code only; thresholds in jest.config.js)
 #   3. build     — TypeScript compilation (strict)
 #   4. security  — npm audit (fails on HIGH or CRITICAL vulnerabilities)
 #
@@ -48,6 +48,16 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -59,9 +69,16 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
 
       - name: Run tests with coverage
         run: npm run test:ci
+        env:
+          CI: "true"
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

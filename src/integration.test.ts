@@ -68,10 +68,12 @@ describe('GET /health', () => {
 });
 
 describe('GET /api/v1/contracts', () => {
-  it('returns 200 with empty contracts array', async () => {
+  it('returns 200 with empty data array', async () => {
     const res = await request(app).get('/api/v1/contracts');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ contracts: [] });
+    expect(res.body).toEqual(
+      expect.objectContaining({ status: 'success', data: [] }),
+    );
   });
 
   it('response includes X-Request-Id header', async () => {

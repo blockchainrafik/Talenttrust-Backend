@@ -91,7 +91,7 @@ describe('QueueManager', () => {
       const jobId = await queueManager.addJob(
         JobType.EMAIL_NOTIFICATION,
         payload,
-        { delay: 5000 }
+        { delay: 50 }
       );
       expect(jobId).toBeDefined();
     });
@@ -120,8 +120,7 @@ describe('QueueManager', () => {
 
       const jobId = await queueManager.addJob(JobType.EMAIL_NOTIFICATION, payload);
       
-      // Wait a bit for job to be processed
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 150));
 
       const status = await queueManager.getJobStatus(
         JobType.EMAIL_NOTIFICATION,

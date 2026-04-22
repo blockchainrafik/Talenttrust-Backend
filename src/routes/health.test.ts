@@ -37,13 +37,16 @@ function request(server: http.Server, method: string, path: string): Promise<Sim
 describe('healthRouter', () => {
   let server: http.Server;
 
-  beforeAll((done) => {
-    const app = express();
-    app.use('/', healthRouter);
-    server = app.listen(0, '127.0.0.1', done);
+  beforeAll((done: jest.DoneCallback) => {
+    const a = express();
+    a.use('/', healthRouter);
+    const s = a.listen(0, '127.0.0.1', done);
+    void (server = s);
   });
 
-  afterAll((done) => server.close(done));
+  afterAll((done) => {
+    void server.close(done);
+  });
 
   it('GET / → 200', async () => {
     const res = await request(server, 'GET', '/');

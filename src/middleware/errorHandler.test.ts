@@ -1,7 +1,7 @@
 import request from 'supertest';
 import express from 'express';
 import { errorHandler, notFoundHandler } from './errorHandler';
-import { UnauthorizedError } from '../errors/AppError';
+import { UnauthorizedError } from '../errors/appError';
 
 const app = express();
 

@@ -17,12 +17,16 @@ describe("Load Test - GET /api/v1/contracts", () => {
     server.close(done);
   });
   it("should serve contracts endpoint under load", async () => {
-    const result = await autocannon({
+    const result = (await autocannon({
       url: "http://localhost:3098/api/v1/contracts",
       connections: 20,
       duration: 15,
       method: "GET",
-    });
+    })) as {
+      requests: { average: number };
+      latency: { average: number; p99: number };
+      errors: number;
+    };
 
     console.log(`RPS: ${result.requests.average}`);
     console.log(`Avg Latency: ${result.latency.average}ms`);

@@ -110,12 +110,11 @@ describe('createApp()', () => {
   // ── Contracts endpoint ────────────────────────────────────────────────────
 
   describe('GET /api/v1/contracts', () => {
-    it('returns 200 with contracts array', async () => {
+    it('returns 200 with success payload', async () => {
       const res = await request(server, 'GET', '/api/v1/contracts');
       expect(res.statusCode).toBe(200);
       const json = JSON.parse(res.body);
-      expect(json).toHaveProperty('contracts');
-      expect(Array.isArray(json.contracts)).toBe(true);
+      expect(json).toEqual(expect.objectContaining({ status: 'success', data: expect.any(Array) }));
     });
 
     it('responds with application/json content-type', async () => {
@@ -123,10 +122,10 @@ describe('createApp()', () => {
       expect(res.headers['content-type']).toMatch(/application\/json/);
     });
 
-    it('contracts array is empty by default', async () => {
+    it('data is empty by default', async () => {
       const res = await request(server, 'GET', '/api/v1/contracts');
       const json = JSON.parse(res.body);
-      expect(json.contracts).toHaveLength(0);
+      expect(json.data).toHaveLength(0);
     });
   });
 
@@ -163,16 +162,20 @@ describe('createApp()', () => {
     let errorServer: http.Server;
 
     beforeAll((done) => {
-      // Mount a route that deliberately throws to exercise the error handler
-      errorApp = createApp();
+      // Minimal app: throw route before the final 404 so the error handler is reached
+      errorApp = express();
       errorApp.get('/throw', () => {
         throw new Error('deliberate test error');
+      });
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      errorApp.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+        res.status(500).json({ error: 'Internal Server Error' });
       });
       errorServer = errorApp.listen(0, '127.0.0.1', done);
     });
 
     afterAll((done) => {
-      errorServer.close(done);
+      void errorServer.close(done);
     });
 
     it('returns 500 when a route throws', async () => {

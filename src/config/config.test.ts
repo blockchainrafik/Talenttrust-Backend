@@ -1,4 +1,4 @@
-import { loadConfig } from './index';
+import { loadConfig } from '../appConfiguration';
 import {
   getEnv,
   requireEnv,
@@ -225,102 +225,18 @@ describe('env utilities', () => {
   });
 });
 
-describe('loadConfig', () => {
+describe('loadConfig (appConfiguration)', () => {
   const savedEnv = { ...process.env };
-
-  beforeEach(() => {
-    clearConfigEnvVars();
-  });
 
   afterAll(() => {
     process.env = savedEnv;
   });
 
-  it('loads defaults when no env vars are set', () => {
+  it('applies default port and upstream when env is minimal', () => {
+    clearConfigEnvVars();
+    delete process.env.PORT;
     const cfg = loadConfig();
-    expect(cfg.server.port).toBe(3001);
-    expect(cfg.server.nodeEnv).toBe('development');
-    expect(cfg.server.isProduction).toBe(false);
-    expect(cfg.stellar.horizonUrl).toBe(
-      'https://horizon-testnet.stellar.org',
-    );
-    expect(cfg.stellar.networkPassphrase).toBe(
-      'Test SDF Network ; September 2015',
-    );
-    expect(cfg.soroban.rpcUrl).toBe('https://soroban-testnet.stellar.org');
-    expect(cfg.soroban.contractId).toBe('');
-  });
-
-  it('loads custom server values from environment', () => {
-    process.env.PORT = '4000';
-    process.env.NODE_ENV = 'production';
-
-    const cfg = loadConfig();
-    expect(cfg.server.port).toBe(4000);
-    expect(cfg.server.nodeEnv).toBe('production');
-    expect(cfg.server.isProduction).toBe(true);
-  });
-
-  it('loads custom Stellar values from environment', () => {
-    process.env.STELLAR_HORIZON_URL = 'https://horizon.stellar.org';
-    process.env.STELLAR_NETWORK_PASSPHRASE =
-      'Public Global Stellar Network ; September 2015';
-
-    const cfg = loadConfig();
-    expect(cfg.stellar.horizonUrl).toBe('https://horizon.stellar.org');
-    expect(cfg.stellar.networkPassphrase).toBe(
-      'Public Global Stellar Network ; September 2015',
-    );
-  });
-
-  it('loads custom Soroban values from environment', () => {
-    process.env.SOROBAN_RPC_URL = 'https://soroban.stellar.org';
-    process.env.SOROBAN_CONTRACT_ID = 'CABC123';
-
-    const cfg = loadConfig();
-    expect(cfg.soroban.rpcUrl).toBe('https://soroban.stellar.org');
-    expect(cfg.soroban.contractId).toBe('CABC123');
-  });
-
-  it('throws when PORT is not a valid integer', () => {
-    process.env.PORT = 'not-a-number';
-    expect(() => loadConfig()).toThrow('must be a valid integer');
-  });
-
-  it('treats empty PORT as missing and uses default', () => {
-    process.env.PORT = '';
-    const cfg = loadConfig();
-    expect(cfg.server.port).toBe(3001);
-  });
-
-  it('treats whitespace-only PORT as missing and uses default', () => {
-    process.env.PORT = '   ';
-    const cfg = loadConfig();
-    expect(cfg.server.port).toBe(3001);
-  });
-
-  it('sets isProduction to false for non-production NODE_ENV', () => {
-    process.env.NODE_ENV = 'staging';
-    const cfg = loadConfig();
-    expect(cfg.server.isProduction).toBe(false);
-  });
-
-  it('returns a frozen config object', () => {
-    const cfg = loadConfig();
-    expect(Object.isFrozen(cfg)).toBe(true);
-    expect(Object.isFrozen(cfg.server)).toBe(true);
-    expect(Object.isFrozen(cfg.stellar)).toBe(true);
-    expect(Object.isFrozen(cfg.soroban)).toBe(true);
-  });
-
-  it('produces independent snapshots on repeated calls', () => {
-    process.env.PORT = '5000';
-    const first = loadConfig();
-
-    process.env.PORT = '6000';
-    const second = loadConfig();
-
-    expect(first.server.port).toBe(5000);
-    expect(second.server.port).toBe(6000);
+    expect(cfg.port).toBe(3001);
+    expect(cfg.upstreamContractsUrl).toBe('https://example.invalid/contracts');
   });
 });

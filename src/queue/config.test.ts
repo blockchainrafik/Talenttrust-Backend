@@ -6,6 +6,16 @@
 
 import { getRedisConfig, queueConfig } from './config';
 
+type StandaloneConn = { host: string; port: number; password?: string; maxRetriesPerRequest?: null };
+
+function redisOpts(): StandaloneConn {
+  return getRedisConfig() as StandaloneConn;
+}
+
+function queueRedis(): StandaloneConn {
+  return queueConfig.redis as StandaloneConn;
+}
+
 describe('Queue Configuration', () => {
   const originalEnv = process.env;
 
@@ -24,7 +34,7 @@ describe('Queue Configuration', () => {
       delete process.env.REDIS_PORT;
       delete process.env.REDIS_PASSWORD;
 
-      const config = getRedisConfig();
+      const config = redisOpts();
 
       expect(config.host).toBe('localhost');
       expect(config.port).toBe(6379);
@@ -36,7 +46,7 @@ describe('Queue Configuration', () => {
       process.env.REDIS_PORT = '6380';
       process.env.REDIS_PASSWORD = 'secret123';
 
-      const config = getRedisConfig();
+      const config = redisOpts();
 
       expect(config.host).toBe('redis.example.com');
       expect(config.port).toBe(6380);
@@ -46,7 +56,7 @@ describe('Queue Configuration', () => {
     it('should parse port as integer', () => {
       process.env.REDIS_PORT = '7000';
 
-      const config = getRedisConfig();
+      const config = redisOpts();
 
       expect(config.port).toBe(7000);
       expect(typeof config.port).toBe('number');
@@ -55,7 +65,7 @@ describe('Queue Configuration', () => {
     it('should handle invalid port gracefully', () => {
       process.env.REDIS_PORT = 'invalid';
 
-      const config = getRedisConfig();
+      const config = redisOpts();
 
       expect(config.port).toBe(NaN);
     });
@@ -75,8 +85,9 @@ describe('Queue Configuration', () => {
 
     it('should have redis configuration', () => {
       expect(queueConfig.redis).toBeDefined();
-      expect(queueConfig.redis.host).toBeDefined();
-      expect(queueConfig.redis.port).toBeDefined();
+      const r = queueRedis();
+      expect(r.host).toBeDefined();
+      expect(r.port).toBeDefined();
     });
   });
 });

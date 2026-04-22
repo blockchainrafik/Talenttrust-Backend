@@ -79,7 +79,7 @@ async function processBatch(
   startBlock: number,
   endBlock: number
 ): Promise<void> {
-  // Simulate blockchain API call and processing
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  const stepDelay = process.env.JEST_WORKER_ID ? 0 : 300;
+  await new Promise((resolve) => setTimeout(resolve, stepDelay));
   console.log(`Processed ${network} blocks ${startBlock}-${endBlock}`);
 }

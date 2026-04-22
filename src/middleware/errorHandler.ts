@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AppError, NotFoundError } from '../errors/AppError';
+import { AppError, NotFoundError } from '../errors/appError';
 
 interface ApiErrorResponse {
   success: false;

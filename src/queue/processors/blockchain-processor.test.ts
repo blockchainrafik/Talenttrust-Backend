@@ -49,7 +49,7 @@ describe('Blockchain Processor', () => {
     it('should reject invalid network', async () => {
       const payload = {
         network: 'ethereum',
-      } as BlockchainSyncPayload;
+      } as unknown as BlockchainSyncPayload;
 
       await expect(processBlockchainSync(payload)).rejects.toThrow(
         'Invalid network'

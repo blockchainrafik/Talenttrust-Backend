@@ -67,6 +67,13 @@ describe('Jobs API', () => {
     });
   });
 
+  afterEach(async () => {
+    await queueManager.shutdown();
+    for (const jobType of Object.values(JobType)) {
+      await queueManager.initializeQueue(jobType);
+    }
+  });
+
   afterAll(async () => {
     await queueManager.shutdown();
   });
@@ -154,7 +161,7 @@ describe('Jobs API', () => {
             subject: 'Delayed',
             body: 'Send later',
           },
-          options: { delay: 5000 },
+          options: { delay: 50 },
         });
 
       expect(response.status).toBe(201);
@@ -177,8 +184,7 @@ describe('Jobs API', () => {
 
       const jobId = enqueueResponse.body.jobId;
 
-      // Wait for processing
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 150));
 
       // Get status
       const statusResponse = await request(app)

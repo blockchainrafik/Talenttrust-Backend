@@ -77,7 +77,7 @@ describe('Contract Processor', () => {
       const payload = {
         contractId: 'contract_12345',
         action: 'invalid-action',
-      } as ContractProcessingPayload;
+      } as unknown as ContractProcessingPayload;
 
       await expect(processContractProcessing(payload)).rejects.toThrow(
         'Invalid action'

@@ -1,4 +1,4 @@
-import { AppConfig } from '../config';
+import { AppConfig } from '../appConfiguration';
 import { ChaosPolicy } from '../chaos/chaosPolicy';
 import { Contract, ContractsPayload } from '../types/contracts';
 

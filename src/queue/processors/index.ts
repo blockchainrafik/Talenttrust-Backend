@@ -21,8 +21,8 @@ export type JobProcessor = (payload: JobPayload) => Promise<JobResult>;
  * Ensures all job types have a corresponding processor
  */
 export const jobProcessors: Record<JobType, JobProcessor> = {
-  [JobType.EMAIL_NOTIFICATION]: processEmailNotification,
-  [JobType.CONTRACT_PROCESSING]: processContractProcessing,
-  [JobType.REPUTATION_UPDATE]: processReputationUpdate,
-  [JobType.BLOCKCHAIN_SYNC]: processBlockchainSync,
+  [JobType.EMAIL_NOTIFICATION]: processEmailNotification as JobProcessor,
+  [JobType.CONTRACT_PROCESSING]: processContractProcessing as JobProcessor,
+  [JobType.REPUTATION_UPDATE]: processReputationUpdate as JobProcessor,
+  [JobType.BLOCKCHAIN_SYNC]: processBlockchainSync as JobProcessor,
 };

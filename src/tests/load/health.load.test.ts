@@ -21,12 +21,16 @@ describe('Load Test - GET /health', () => {
   });
 
   it('should handle baseline load with no errors', async () => {
-    const result = await autocannon({
+    const result = (await autocannon({
       url: 'http://localhost:3099/health',
       connections: 10,   // 10 concurrent users
       duration: 10,      // for 10 seconds
       method: 'GET',
-    });
+    })) as {
+      requests: { average: number };
+      latency: { average: number };
+      errors: number;
+    };
 
     console.log(`RPS: ${result.requests.average}`);
     console.log(`Avg Latency: ${result.latency.average}ms`);

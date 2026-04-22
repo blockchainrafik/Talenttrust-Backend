@@ -35,18 +35,22 @@ export const metadataIdParamsSchema = z.object({
 });
 
 export const paginationQuerySchema = z.object({
-  page: z.string()
-    .regex(/^\d+$/, 'Page must be a positive integer')
-    .transform(Number)
-    .refine(n => n > 0, 'Page must be greater than 0')
-    .default(1)
-    .optional(),
-  limit: z.string()
-    .regex(/^\d+$/, 'Limit must be a positive integer')
-    .transform(Number)
-    .refine(n => n > 0 && n <= 100, 'Limit must be between 1 and 100')
-    .default(20)
-    .optional(),
+  page: z.preprocess(
+    (v) => (v === undefined || v === '' || v === null ? '1' : v),
+    z
+      .string()
+      .regex(/^\d+$/, 'Page must be a positive integer')
+      .transform((s: string) => Number(s))
+      .refine((n: number) => n > 0, 'Page must be greater than 0'),
+  ),
+  limit: z.preprocess(
+    (v) => (v === undefined || v === '' || v === null ? '20' : v),
+    z
+      .string()
+      .regex(/^\d+$/, 'Limit must be a positive integer')
+      .transform((s: string) => Number(s))
+      .refine((n: number) => n > 0 && n <= 100, 'Limit must be between 1 and 100'),
+  ),
   key: z.string().optional(),
   data_type: z.enum(['string', 'number', 'boolean', 'json']).optional()
 });
