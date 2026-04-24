@@ -17,6 +17,8 @@ import { healthRouter } from './routes/health';
 import contractsModuleRouter from './routes/contracts.routes';
 import reputationRouter from './routes/reputation.routes';
 import { requestIdMiddleware } from './middleware/requestId';
+import swaggerUi from 'swagger-ui-express';
+import { generateOpenApiSpec } from './docs/generate-openapi';
 
 /**
  * Creates and configures the Express application.
@@ -34,6 +36,10 @@ export function createApp(): express.Application {
   app.use('/health', healthRouter);
   app.use('/api/v1/contracts', contractsModuleRouter);
   app.use('/api/v1/reputation', reputationRouter);
+
+  // ── OpenAPI Documentation ──────────────────────────────────────────────────
+  const spec = generateOpenApiSpec();
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(spec));
 
   // ── 404 handler ──────────────────────────────────────────────────────────
   app.use((_req: Request, res: Response) => {
