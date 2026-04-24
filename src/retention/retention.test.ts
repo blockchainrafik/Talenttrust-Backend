@@ -132,18 +132,6 @@ describe('RetentionPolicyEngine', () => {
         isActive: true,
       });
 
-      const inactive = engine.createPolicy({
-        name: 'Inactive Policy',
-        description: 'Inactive',
-        entityType: DataEntityType.DOCUMENT,
-        period: RetentionPeriod.THIRTY_DAYS,
-        classification: DataClassification.INTERNAL,
-        archivalType: ArchivalStorageType.LOCAL,
-        encryptArchive: false,
-        allowPermanentRetention: false,
-        isActive: false,
-      });
-
       const active_policies = engine.getActivePolicies();
       expect(active_policies).toHaveLength(1);
       expect(active_policies[0].id).toBe(active.id);

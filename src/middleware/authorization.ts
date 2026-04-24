@@ -36,7 +36,7 @@
  *    leakage to attackers.
  */
 
-import type { Request, Response, NextFunction } from "express";
+import type { Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { isAuthorized, isValidRole } from "../lib/authorization";
 import type { Action, User, Resource, Role, AuthenticatedRequest } from "../lib/types";
