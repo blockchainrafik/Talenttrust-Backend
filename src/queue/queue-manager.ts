@@ -11,6 +11,26 @@ import { JobType, JobPayload, JobResult } from './types';
 import { jobProcessors } from './processors';
 
 /**
+ * Queue health information - safe for admin exposure
+ */
+export interface QueueHealthInfo {
+  jobType: JobType;
+  isInitialized: boolean;
+  waiting: number;
+  active: number;
+  completed: number;
+  failed: number;
+  delayed: number;
+  paused: boolean;
+}
+
+export interface FailedJobInfo {
+  jobId: string;
+  jobType: JobType;
+  failedAt: number;
+  error: string;
+}
+/**
  * QueueManager handles queue lifecycle and job processing
  * Implements singleton pattern to ensure single Redis connection pool
  */
@@ -209,5 +229,81 @@ export class QueueManager {
     this.isShuttingDown = false;
 
     console.log('Queue manager shutdown complete');
+  }
+
+  /**
+   * Get health information for all queues
+   * Returns sanitized queue metrics without sensitive job data
+   *
+   * @returns Array of queue health information
+   */
+  public async getHealth(): Promise<QueueHealthInfo[]> {
+    const healthInfos: QueueHealthInfo[] = [];
+
+    for (const jobType of Object.values(JobType)) {
+      const queue = this.queues.get(jobType);
+      const worker = this.workers.get(jobType);
+
+      if (queue && worker) {
+        const [waiting, active, completed, failed, delayed] = await Promise.all([
+          queue.getWaitingCount(),
+          queue.getActiveCount(),
+          queue.getCompletedCount(),
+          queue.getFailedCount(),
+          queue.getDelayedCount(),
+        ]);
+
+        healthInfos.push({
+          jobType,
+          isInitialized: true,
+          waiting,
+          active,
+          completed,
+          failed,
+          delayed,
+          paused: await worker.isRunning() === false,
+        });
+      } else {
+        healthInfos.push({
+          jobType,
+          isInitialized: false,
+          waiting: 0,
+          active: 0,
+          completed: 0,
+          failed: 0,
+          delayed: 0,
+          paused: false,
+        });
+      }
+    }
+
+    return healthInfos;
+  }
+
+  /**
+   * Get recent failed jobs
+   * Returns sanitized information about recently failed jobs without exposing payloads
+   *
+   * @param limit - Maximum number of failed jobs to return (default 10)
+   * @returns Array of failed job information
+   */
+  public async getRecentFailures(limit = 10): Promise<FailedJobInfo[]> {
+    const failures: FailedJobInfo[] = [];
+
+    for (const [jobType, queue] of this.queues) {
+      const failedJobs = await queue.getFailed(0, limit);
+      for (const job of failedJobs) {
+        failures.push({
+          jobId: job.id?.toString() ?? 'unknown',
+          jobType,
+          failedAt: job.finishedOn ?? Date.now(),
+          error: job.failedReason ?? 'Unknown error',
+        });
+      }
+    }
+
+    return failures
+      .sort((a, b) => b.failedAt - a.failedAt)
+      .slice(0, limit);
   }
 }
