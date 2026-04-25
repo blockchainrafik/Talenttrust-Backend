@@ -8,7 +8,7 @@
 
 import type { Request, Response } from 'express';
 import { createApp } from './app';
-import { JobType, JobPayload, QueueManager } from './queue';
+import { JobType, JobPayload, QueueManager, AddJobOptions } from './queue';
 
 const queueManager = QueueManager.getInstance();
 
@@ -19,7 +19,7 @@ app.post('/api/v1/jobs', async (req: Request, res: Response) => {
     const { type, payload, options } = req.body as {
       type?: string;
       payload?: unknown;
-      options?: { priority?: number; delay?: number };
+      options?: AddJobOptions;
     };
 
     if (!type || payload === undefined) {
@@ -30,8 +30,13 @@ app.post('/api/v1/jobs', async (req: Request, res: Response) => {
       return res.status(400).json({ error: `Invalid job type: ${type}` });
     }
 
-    const jobId = await queueManager.addJob(type as JobType, payload as JobPayload, options);
-    return res.status(201).json({ jobId, type, status: 'queued' });
+    const { jobId, deduplicated } = await queueManager.addJob(
+      type as JobType,
+      payload as JobPayload,
+      options,
+    );
+    const httpStatus = deduplicated ? 200 : 201;
+    return res.status(httpStatus).json({ jobId, type, status: 'queued', deduplicated });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ error: `Failed to enqueue job: ${message}` });

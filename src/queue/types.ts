@@ -71,3 +71,24 @@ export interface JobResult {
   data?: unknown;
   error?: string;
 }
+
+/**
+ * Options for addJob — extends base scheduling options with deduplication support.
+ * When dedupeKey is provided, BullMQ will not create a new job if one with the
+ * same key is already waiting, active, or delayed. Optionally, dedupeTtl keeps
+ * the key alive after completion so re-enqueue is suppressed during that window.
+ */
+export interface AddJobOptions {
+  priority?: number;
+  delay?: number;
+  dedupeKey?: string;
+  dedupeTtl?: number;
+}
+
+/**
+ * Return value of addJob — includes whether the call hit an existing job.
+ */
+export interface AddJobResult {
+  jobId: string;
+  deduplicated: boolean;
+}

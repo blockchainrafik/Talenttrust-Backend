@@ -61,9 +61,10 @@ describe('QueueManager', () => {
         body: 'This is a test',
       };
 
-      const jobId = await queueManager.addJob(JobType.EMAIL_NOTIFICATION, payload);
+      const { jobId, deduplicated } = await queueManager.addJob(JobType.EMAIL_NOTIFICATION, payload);
       expect(jobId).toBeDefined();
       expect(typeof jobId).toBe('string');
+      expect(deduplicated).toBe(false);
     });
 
     it('should add a job with priority', async () => {
@@ -73,7 +74,7 @@ describe('QueueManager', () => {
         body: 'High priority',
       };
 
-      const jobId = await queueManager.addJob(
+      const { jobId } = await queueManager.addJob(
         JobType.EMAIL_NOTIFICATION,
         payload,
         { priority: 1 }
@@ -88,12 +89,47 @@ describe('QueueManager', () => {
         body: 'Send later',
       };
 
-      const jobId = await queueManager.addJob(
+      const { jobId } = await queueManager.addJob(
         JobType.EMAIL_NOTIFICATION,
         payload,
         { delay: 50 }
       );
       expect(jobId).toBeDefined();
+    });
+
+    it('should return same jobId for duplicate dedupeKey', async () => {
+      const payload = {
+        to: 'dedup@example.com',
+        subject: 'Dedup Test',
+        body: 'First submission',
+      };
+      const dedupeKey = 'email-dedup-test-001';
+
+      const first = await queueManager.addJob(JobType.EMAIL_NOTIFICATION, payload, { dedupeKey, delay: 5000 });
+      const second = await queueManager.addJob(JobType.EMAIL_NOTIFICATION, payload, { dedupeKey, delay: 5000 });
+
+      expect(first.jobId).toBe(dedupeKey);
+      expect(second.jobId).toBe(dedupeKey);
+      expect(first.deduplicated).toBe(false);
+      expect(second.deduplicated).toBe(true);
+    });
+
+    it('should allow re-enqueue after job completes', async () => {
+      const payload = {
+        to: 'requeue@example.com',
+        subject: 'Re-enqueue Test',
+        body: 'First run',
+      };
+      const dedupeKey = 'email-requeue-test-001';
+
+      const first = await queueManager.addJob(JobType.EMAIL_NOTIFICATION, payload, { dedupeKey });
+      // Wait for job to be processed
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      const second = await queueManager.addJob(JobType.EMAIL_NOTIFICATION, payload, { dedupeKey });
+      expect(first.jobId).toBe(dedupeKey);
+      // After completion, second enqueue should not be flagged as deduplicated
+      expect(second.deduplicated).toBe(false);
     });
 
     it('should throw error when queue not initialized', async () => {
@@ -118,8 +154,8 @@ describe('QueueManager', () => {
         body: 'Check status',
       };
 
-      const jobId = await queueManager.addJob(JobType.EMAIL_NOTIFICATION, payload);
-      
+      const { jobId } = await queueManager.addJob(JobType.EMAIL_NOTIFICATION, payload);
+
       await new Promise((resolve) => setTimeout(resolve, 150));
 
       const status = await queueManager.getJobStatus(

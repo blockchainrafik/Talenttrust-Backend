@@ -5,9 +5,9 @@
  * Provides a unified interface for job enqueueing and processing.
  */
 
-import { Queue, Worker, Job, QueueEvents } from 'bullmq';
+import { Queue, Worker, Job, QueueEvents, JobsOptions } from 'bullmq';
 import { queueConfig } from './config';
-import { JobType, JobPayload, JobResult } from './types';
+import { JobType, JobPayload, JobResult, AddJobOptions, AddJobResult } from './types';
 import { jobProcessors } from './processors';
 
 /**
@@ -73,26 +73,56 @@ export class QueueManager {
   }
 
   /**
-   * Add a job to the queue
-   * 
+   * Add a job to the queue with optional idempotency via a dedupe key.
+   *
+   * When dedupeKey is supplied, BullMQ will not create a new job if one with
+   * that key is already waiting, active, or delayed. An optional dedupeTtl
+   * (ms) keeps the key alive after completion to suppress re-enqueue during
+   * that window. The returned AddJobResult.deduplicated flag indicates whether
+   * an existing job was reused.
+   *
    * @param jobType - Type of job to enqueue
    * @param payload - Job-specific data payload
-   * @param options - Optional job configuration (priority, delay, etc.)
-   * @returns Job ID
+   * @param options - Scheduling and deduplication options
+   * @returns { jobId, deduplicated }
    * @throws Error if queue not initialized or job addition fails
    */
   public async addJob(
     jobType: JobType,
     payload: JobPayload,
-    options?: { priority?: number; delay?: number }
-  ): Promise<string> {
+    options?: AddJobOptions
+  ): Promise<AddJobResult> {
     const queue = this.queues.get(jobType);
     if (!queue) {
       throw new Error(`Queue for ${jobType} not initialized`);
     }
 
-    const job = await queue.add(jobType, payload, options);
-    return job.id!;
+    const { priority, delay, dedupeKey, dedupeTtl } = options ?? {};
+
+    const bullOptions: JobsOptions = { priority, delay };
+
+    if (dedupeKey) {
+      bullOptions.jobId = dedupeKey;
+      bullOptions.deduplication = {
+        id: dedupeKey,
+        ...(dedupeTtl !== undefined && { ttl: dedupeTtl }),
+      };
+    }
+
+    // Pre-check: determine if an active/waiting/delayed job already exists.
+    // TOCTOU window exists here, but queue.add() deduplication is the hard
+    // guarantee — this pre-check is only for setting the response flag.
+    let deduplicated = false;
+    if (dedupeKey) {
+      const existing = await queue.getJob(dedupeKey);
+      if (existing) {
+        const state = await existing.getState();
+        deduplicated = !['completed', 'failed', 'unknown'].includes(state);
+      }
+    }
+
+    const job = await queue.add(jobType, payload, bullOptions);
+    return { jobId: job.id!, deduplicated };
   }
 
   /**
