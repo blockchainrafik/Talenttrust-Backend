@@ -43,7 +43,16 @@
     "zod": "^3.23.8"
   },
   "overrides": {
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.0",
+    "autocannon": {
+      "uuid": "^9.0.0"
+    },
+    "hyperid": {
+      "uuid": "^9.0.0"
+    },
+    "bullmq": {
+      "uuid": "^9.0.0"
+    }
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
