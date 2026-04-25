@@ -1,5 +1,3 @@
-import '../../database';
-
 export interface ContractMetadata {
   id: string;
   contract_id: string;

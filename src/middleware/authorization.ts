@@ -242,7 +242,7 @@ export function requirePermission(
       }
 
       next();
-    } catch (err) {
+    } catch {
       // Resolver threw — treat as a server error, not an auth failure.
       res.status(500).json({ error: "Authorization check failed." });
     }

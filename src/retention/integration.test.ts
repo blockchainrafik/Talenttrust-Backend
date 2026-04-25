@@ -234,6 +234,17 @@ describe('Integration: Data Retention Lifecycle', () => {
         'admin',
       );
 
+      await manager.storeData(
+        {
+          entityType: DataEntityType.USER_PROFILE,
+          data: { userId: 'user2', email: 'user2@example.com' },
+          classification: DataClassification.RESTRICTED,
+          createdAt: creationDate,
+        },
+        policy.id,
+        'admin',
+      );
+
       // Archive first profile
       await manager.archiveData(profile1.data.id, 'admin');
 
