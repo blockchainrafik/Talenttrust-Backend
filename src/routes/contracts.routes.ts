@@ -7,14 +7,14 @@ import { paginationQuerySchema } from '../utils/pagination';
 
 const router = Router();
 
-// Configure routes for the Contracts module
-router.get('/', validateQuery(paginationQuerySchema), ContractsController.getContracts);
+router.get('/bounds', ContractsController.getBounds);
 
-// Enforce Zod input validation on the POST route
+router.get('/', ContractsController.getContracts);
+
 router.post(
-  '/', 
-  validateSchema(createContractSchema), 
-  ContractsController.createContract
+  '/',
+  validateSchema(createContractSchema),
+  ContractsController.createContract,
 );
 
 export default router;
