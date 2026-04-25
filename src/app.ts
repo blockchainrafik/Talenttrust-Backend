@@ -17,6 +17,8 @@ import { healthRouter } from './routes/health';
 import contractsModuleRouter from './routes/contracts.routes';
 import reputationRouter from './routes/reputation.routes';
 import { requestIdMiddleware } from './middleware/requestId';
+import { metricsAuthMiddleware } from './middleware/metricsAuth';
+import { MetricsService } from './observability';
 
 /**
  * Creates and configures the Express application.
@@ -26,14 +28,26 @@ import { requestIdMiddleware } from './middleware/requestId';
 export function createApp(): express.Application {
   const app = express();
 
+  const metricsService = new MetricsService(
+    process.env['SERVICE_NAME'] ?? 'talenttrust-backend',
+  );
+
   // ── Middleware ────────────────────────────────────────────────────────────
   app.use(express.json());
   app.use(requestIdMiddleware);
+  app.use(metricsService.trackHttpRequest.bind(metricsService));
 
   // ── Routes ────────────────────────────────────────────────────────────────
   app.use('/health', healthRouter);
   app.use('/api/v1/contracts', contractsModuleRouter);
   app.use('/api/v1/reputation', reputationRouter);
+
+  // ── Metrics endpoint (protected by bearer token in production) ───────────
+  app.get('/metrics', metricsAuthMiddleware, async (_req: Request, res: Response) => {
+    res.setHeader('Content-Type', metricsService.contentType);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(await metricsService.getMetrics());
+  });
 
   // ── 404 handler ──────────────────────────────────────────────────────────
   app.use((_req: Request, res: Response) => {
