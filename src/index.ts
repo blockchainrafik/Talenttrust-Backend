@@ -7,14 +7,18 @@
  */
 
 import type { Request, Response } from 'express';
-import { createApp } from './app';
+import { createApp, shutdownRateLimitStore } from './app';
 import { JobType, JobPayload, QueueManager } from './queue';
+import { createRateLimiter } from './middleware/rateLimiter';
+import { rateLimitConfig } from './config/rateLimit';
 
 const queueManager = QueueManager.getInstance();
 
 const app = createApp();
 
-app.post('/api/v1/jobs', async (req: Request, res: Response) => {
+const strictLimiter = createRateLimiter(rateLimitConfig.strict);
+
+app.post('/api/v1/jobs', strictLimiter, async (req: Request, res: Response) => {
   try {
     const { type, payload, options } = req.body as {
       type?: string;
@@ -80,6 +84,7 @@ async function initializeQueues(): Promise<void> {
 async function gracefulShutdown(): Promise<void> {
   if (!isJest) {
     await queueManager.shutdown();
+    shutdownRateLimitStore();
   }
   process.exit(0);
 }

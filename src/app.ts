@@ -12,11 +12,15 @@
  *    introduced (tracked in docs/backend/security.md).
  */
 
-import express, { Request, Response, NextFunction } from 'express';
+import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { healthRouter } from './routes/health';
 import contractsModuleRouter from './routes/contracts.routes';
 import reputationRouter from './routes/reputation.routes';
+import authRouter from './routes/auth.routes';
 import { requestIdMiddleware } from './middleware/requestId';
+import { createRateLimiter } from './middleware/rateLimiter';
+import { rateLimitConfig, rateLimitStore } from './config/rateLimit';
 
 /**
  * Creates and configures the Express application.
@@ -32,8 +36,13 @@ export function createApp(): express.Application {
 
   // ── Routes ────────────────────────────────────────────────────────────────
   app.use('/health', healthRouter);
-  app.use('/api/v1/contracts', contractsModuleRouter);
-  app.use('/api/v1/reputation', reputationRouter);
+
+  // Auth routes: strict rate limiting to prevent credential stuffing
+  app.use('/api/v1/auth', createRateLimiter(rateLimitConfig.strict), authRouter);
+
+  // Standard tier: all /api endpoints get base rate limiting
+  app.use('/api/v1/contracts', createRateLimiter(rateLimitConfig.standard), contractsModuleRouter);
+  app.use('/api/v1/reputation', createRateLimiter(rateLimitConfig.standard), reputationRouter);
 
   // ── 404 handler ──────────────────────────────────────────────────────────
   app.use((_req: Request, res: Response) => {
@@ -48,4 +57,10 @@ export function createApp(): express.Application {
   });
 
   return app;
+}
+
+/** Shutdown handler for graceful termination. */
+export function shutdownRateLimitStore(): void {
+  rateLimitStore.destroy();
+  console.log('[rateLimit] Store shutdown complete');
 }
