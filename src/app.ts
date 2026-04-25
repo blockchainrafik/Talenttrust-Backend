@@ -19,24 +19,11 @@ import reputationRouter from './routes/reputation.routes';
 import dependencyScanRouter from './routes/dependency-scan.routes';
 import { requestIdMiddleware } from './middleware/requestId';
 
-/**
- * Creates and configures the Express application.
- *
- * @returns Configured Express app instance (not yet listening).
- */
-export function createApp(): express.Application {
-  const app = express();
+interface AppFactoryOptions {
+  includeTerminalHandlers?: boolean;
+}
 
-  // ── Middleware ────────────────────────────────────────────────────────────
-  app.use(express.json());
-  app.use(requestIdMiddleware);
-
-  // ── Routes ────────────────────────────────────────────────────────────────
-  app.use('/health', healthRouter);
-  app.use('/api/v1/contracts', contractsModuleRouter);
-  app.use('/api/v1/reputation', reputationRouter);
-  app.use('/api/v1/dependency-scan', dependencyScanRouter);
-
+export function attachTerminalHandlers(app: express.Application): void {
   // ── 404 handler ──────────────────────────────────────────────────────────
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: 'Not Found' });
@@ -48,6 +35,30 @@ export function createApp(): express.Application {
     console.error(err.stack);
     res.status(500).json({ error: 'Internal Server Error' });
   });
+}
+
+/**
+ * Creates and configures the Express application.
+ *
+ * @returns Configured Express app instance (not yet listening).
+ */
+export function createApp(options: AppFactoryOptions = {}): express.Application {
+  const app = express();
+  const { includeTerminalHandlers = true } = options;
+
+  // ── Middleware ────────────────────────────────────────────────────────────
+  app.use(express.json());
+  app.use(requestIdMiddleware);
+
+  // ── Routes ────────────────────────────────────────────────────────────────
+  app.use('/health', healthRouter);
+  app.use('/api/v1/contracts', contractsModuleRouter);
+  app.use('/api/v1/reputation', reputationRouter);
+  app.use('/api/v1/dependency-scan', dependencyScanRouter);
+
+  if (includeTerminalHandlers) {
+    attachTerminalHandlers(app);
+  }
 
   return app;
 }
