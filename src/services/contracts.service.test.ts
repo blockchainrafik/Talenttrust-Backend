@@ -1,5 +1,6 @@
 import { ContractsService } from './contracts.service';
 import { SorobanService } from './soroban.service';
+import { ContractRepository } from '../repositories/contractRepository';
 
 // Mock the SorobanService to isolate tests
 jest.mock('./soroban.service');
@@ -7,13 +8,24 @@ jest.mock('./soroban.service');
 describe('ContractsService', () => {
   let contractsService: ContractsService;
   let mockSorobanService: jest.Mocked<SorobanService>;
+  let mockRepository: jest.Mocked<ContractRepository>;
 
   beforeEach(() => {
     mockSorobanService = new SorobanService() as jest.Mocked<SorobanService>;
 
+    mockRepository = {
+      findAll: jest.fn().mockReturnValue([]),
+      findById: jest.fn().mockReturnValue(undefined),
+      findByClientId: jest.fn().mockReturnValue([]),
+      create: jest.fn(),
+      updateStatus: jest.fn(),
+      updateWithVersion: jest.fn(),
+      delete: jest.fn(),
+    } as unknown as jest.Mocked<ContractRepository>;
+
     // In our implementation, ContractsService instantiates its own SorobanService.
     // By mocking the module, instances will be mocked automatically.
-    contractsService = new ContractsService();
+    contractsService = new ContractsService(mockRepository);
   });
 
   afterEach(() => {

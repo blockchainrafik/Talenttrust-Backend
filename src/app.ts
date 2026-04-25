@@ -17,6 +17,7 @@ import { healthRouter } from './routes/health';
 import contractsModuleRouter from './routes/contracts.routes';
 import reputationRouter from './routes/reputation.routes';
 import { requestIdMiddleware } from './middleware/requestId';
+import { AppError } from './errors/appError';
 
 /**
  * Creates and configures the Express application.
@@ -43,6 +44,14 @@ export function createApp(): express.Application {
   // ── Global error handler ─────────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+    if (err instanceof AppError) {
+      return res.status(err.statusCode).json({
+        error: {
+          code: err.code,
+          message: err.message,
+        },
+      });
+    }
     console.error(err.stack);
     res.status(500).json({ error: 'Internal Server Error' });
   });

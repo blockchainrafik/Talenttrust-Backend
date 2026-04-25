@@ -22,6 +22,125 @@ Authorization: Bearer <token>
 - `demo-admin-token` - Admin user with full access
 - `demo-user-token` - Regular user with limited access
 
+## Contracts API
+
+### Overview
+
+The Contracts API provides endpoints for managing escrow contract records. Contract records include a `version` field that enables Optimistic Concurrency Control (OCC) on update operations.
+
+### The `version` Field
+
+Every contract record carries a `version` field:
+
+- **Type:** `integer` (non-negative)
+- **Initial value:** `0` — set automatically when a contract is created
+- **Increment:** incremented by exactly `1` on every successful update
+
+The `version` field is included in all GET and PATCH responses. Clients must echo back the `version` they last read when submitting an update; the server accepts the write only when the stored version matches, then atomically increments it.
+
+### Endpoints
+
+#### Update Contract
+
+**PATCH** `/api/v1/contracts/:id`
+
+Updates an existing contract record using Optimistic Concurrency Control. The request body must include the `version` value from the most recent read of the contract. The server performs an atomic compare-and-swap: if the stored version matches the supplied version, the update is applied and the version is incremented by 1. If the versions do not match (indicating a concurrent modification), the request is rejected with a 409 conflict error.
+
+**Request Body:**
+```json
+{
+  "version": 3,
+  "title": "Updated contract title"
+}
+```
+
+**Response (200) — success:**
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "title": "Updated contract title",
+    "clientId": "user-uuid-1",
+    "freelancerId": "user-uuid-2",
+    "amount": 10000,
+    "status": "active",
+    "version": 4,
+    "createdAt": "2024-01-15T10:00:00.000Z"
+  }
+}
+```
+
+The `version` in the response (`4`) is exactly 1 greater than the version supplied in the request (`3`).
+
+**Response (409) — version conflict:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ERR_CONFLICT",
+    "message": "Version conflict"
+  }
+}
+```
+
+Returned when the supplied `version` does not match the stored version, meaning another client has modified the contract since you last read it.
+
+**Response (400) — missing version:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ERR_MISSING_VERSION",
+    "message": "version field is required for updates"
+  }
+}
+```
+
+Returned when the request body does not include a `version` field.
+
+**Response (400) — invalid version:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ERR_INVALID_VERSION",
+    "message": "version must be a non-negative integer"
+  }
+}
+```
+
+Returned when `version` is present but is not a non-negative integer (e.g., a negative number, a float, a string, or `null`).
+
+### Client Retry Strategy
+
+When you receive a `409 ERR_CONFLICT` response, the recommended approach is:
+
+1. **Fetch the latest contract** — `GET /api/v1/contracts/:id`
+2. **Extract the current `version`** from the response body
+3. **Resubmit your update** with the new `version` value
+
+This ensures your update is applied on top of the most recent state of the contract, preventing lost updates.
+
+```bash
+# Step 1: fetch latest contract
+curl -X GET http://localhost:3001/api/v1/contracts/a1b2c3d4 \
+  -H "Authorization: Bearer demo-user-token"
+
+# Step 2: note the version in the response, e.g. "version": 5
+
+# Step 3: resubmit with the current version
+curl -X PATCH http://localhost:3001/api/v1/contracts/a1b2c3d4 \
+  -H "Authorization: Bearer demo-user-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "version": 5,
+    "title": "My updated title"
+  }'
+```
+
+---
+
 ## Contract Metadata API
 
 ### Overview

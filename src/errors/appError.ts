@@ -33,6 +33,24 @@ export class UnauthorizedError extends AppError {
   }
 }
 
+export class MissingVersionError extends AppError {
+  constructor() {
+    super(400, 'ERR_MISSING_VERSION', 'version field is required for updates');
+  }
+}
+
+export class InvalidVersionError extends AppError {
+  constructor() {
+    super(400, 'ERR_INVALID_VERSION', 'version must be a non-negative integer');
+  }
+}
+
+export class VersionConflictError extends AppError {
+  constructor() {
+    super(409, 'ERR_CONFLICT', 'Version conflict');
+  }
+}
+
 /**
  * Normalizes thrown errors into a safe and consistent API response payload.
  */
