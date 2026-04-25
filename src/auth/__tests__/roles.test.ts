@@ -35,7 +35,7 @@ describe('Access Control Matrix – structural integrity', () => {
       const resources = ACCESS_CONTROL_MATRIX[role];
       for (const actions of Object.values(resources)) {
         const unique = new Set(actions as Action[]);
-        expect(unique.size).toBe((actions as Action[]).length);
+        expect(unique.size).toBe(actions.length);
       }
     }
   });
