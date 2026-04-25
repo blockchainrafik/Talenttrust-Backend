@@ -1,15 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { ContractsService } from '../services/contracts.service';
-import { 
-  CreateContractDto, 
-  UpdateContractDto, 
-  ContractQueryParams, 
-  ContractIdParams,
-  ContractResponse,
-  ContractListResponse 
-} from '../modules/contracts/dto/contract.dto';
+import { ContractRepository } from '../repositories/contractRepository';
+import { getDb } from '../db/database';
+import { CreateContractDto } from '../modules/contracts/dto/contract.dto';
+import { CONTRACT_BOUNDS, ContractBoundsError } from '../contracts/bounds';
 
-const contractsService = new ContractsService();
+const contractsService = new ContractsService(new ContractRepository(getDb()));
 
 /**
  * Standard API response envelope for consistent responses
@@ -27,22 +23,43 @@ interface ApiResponse<T = any> {
  * Delegates core logic to the ContractsService.
  */
 export class ContractsController {
-  
+
   /**
    * GET /api/v1/contracts
-   * Fetch contracts with filtering, sorting, and pagination
+   * Fetch a paginated list of escrow contracts.
+   *
+   * Query params:
+   *   page  - positive integer, defaults to 1
+   *   limit - positive integer 1..100, defaults to 20
+   *
+   * Returns 400 if page or limit are invalid (non-integer, negative, or out of range).
    */
-  public static async getContracts(req: Request, res: Response, next: NextFunction) {
+  public static async getContracts(_req: Request, res: Response, next: NextFunction) {
     try {
-      const queryParams: ContractQueryParams = req.query as any;
-      const result: ContractListResponse = await contractsService.getContracts(queryParams);
-      
-      const response: ApiResponse<ContractListResponse> = {
+      const pagination = parsePaginationQuery((req.query ?? {}) as Record<string, unknown>);
+      if (!pagination.ok) {
+        res.status(400).json({
+          status: 'error',
+          message: pagination.error,
+        });
+        return;
+      }
+
+      const allContracts = await contractsService.getAllContracts();
+      const { page, limit, offset } = pagination.value;
+      const pageItems = applyPagination(allContracts, { page, limit, offset });
+      const total = allContracts.length;
+
+      res.status(200).json({
         status: 'success',
-        data: result,
-      };
-      
-      res.status(200).json(response);
+        data: pageItems,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      });
     } catch (error) {
       next(error);
     }
@@ -50,27 +67,16 @@ export class ContractsController {
 
   /**
    * GET /api/v1/contracts/:id
-   * Fetch a single contract by ID
+   * Fetch a single contract by ID (includes version field).
    */
   public static async getContractById(req: Request, res: Response, next: NextFunction) {
     try {
-      const { id } = req.params as ContractIdParams;
-      const contract: ContractResponse | null = await contractsService.getContractById(id);
-      
+      const contract = await contractsService.getContractById(req.params.id);
       if (!contract) {
-        const response: ApiResponse = {
-          status: 'error',
-          error: 'Contract not found',
-        };
-        return res.status(404).json(response);
+        res.status(404).json({ status: 'error', error: { code: 'not_found', message: 'Not found' } });
+        return;
       }
-      
-      const response: ApiResponse<ContractResponse> = {
-        status: 'success',
-        data: contract,
-      };
-      
-      res.status(200).json(response);
+      res.status(200).json({ status: 'success', data: contract });
     } catch (error) {
       next(error);
     }
@@ -155,7 +161,19 @@ export class ContractsController {
       
       res.status(200).json(response);
     } catch (error) {
+      if (error instanceof ContractBoundsError) {
+        res.status(422).json({ status: 'error', message: error.message });
+        return;
+      }
       next(error);
     }
+  }
+
+  /**
+   * GET /api/v1/contracts/bounds
+   * Returns the enforced per-contract limits for client discovery.
+   */
+  public static getBounds(_req: Request, res: Response) {
+    res.status(200).json({ status: 'success', data: CONTRACT_BOUNDS });
   }
 }

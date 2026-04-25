@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_MILESTONES_PER_CONTRACT, milestoneSchema } from '../../../contracts/bounds';
 
 // Base contract schema for common fields
 const contractBaseSchema = {
@@ -53,54 +54,27 @@ export const contractQuerySchema = z.object({
     status: z.enum(['PENDING', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'DISPUTED']).optional(),
     clientId: z.string().uuid().optional(),
     freelancerId: z.string().uuid().optional(),
-    sortBy: z.enum(['createdAt', 'updatedAt', 'budget', 'deadline']).default('createdAt'),
-    sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  }).strict(),
-});
-
-// Path parameter schema for contract ID
-export const contractIdSchema = z.object({
-  params: z.object({
-    id: z.string().uuid(),
-  }).strict(),
-});
-
-// Response schemas for consistent API responses
-export const contractResponseSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string(),
-  description: z.string(),
-  freelancerId: z.string().uuid().nullable(),
-  clientId: z.string().uuid(),
-  budget: z.number(),
-  deadline: z.string().datetime().nullable(),
-  status: z.enum(['PENDING', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'DISPUTED']),
-  terms: z.string().nullable(),
-  milestones: z.array(z.object({
-    title: z.string(),
-    description: z.string(),
-    amount: z.number(),
-    deadline: z.string().datetime().nullable(),
-    completed: z.boolean(),
-  })).nullable(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
-
-export const contractListResponseSchema = z.object({
-  contracts: z.array(contractResponseSchema),
-  pagination: z.object({
-    page: z.number(),
-    limit: z.number(),
-    total: z.number(),
-    totalPages: z.number(),
+    budget: z.number().positive(),
+    milestones: z
+      .array(milestoneSchema)
+      .max(
+        MAX_MILESTONES_PER_CONTRACT,
+        `Cannot exceed ${MAX_MILESTONES_PER_CONTRACT} milestones per contract`,
+      )
+      .optional(),
   }),
 });
 
-// Export types
+registry.register('CreateContract', createContractSchema.shape.body);
+
 export type CreateContractDto = z.infer<typeof createContractSchema>['body'];
+
+export const updateContractSchema = z.object({
+  body: z.object({
+    version: z.number().int().min(0),
+    title: z.string().min(5).max(100).optional(),
+    status: z.enum(['draft', 'active', 'completed', 'disputed', 'cancelled']).optional(),
+  }),
+});
+
 export type UpdateContractDto = z.infer<typeof updateContractSchema>['body'];
-export type ContractQueryParams = z.infer<typeof contractQuerySchema>['query'];
-export type ContractIdParams = z.infer<typeof contractIdSchema>['params'];
-export type ContractResponse = z.infer<typeof contractResponseSchema>;
-export type ContractListResponse = z.infer<typeof contractListResponseSchema>;

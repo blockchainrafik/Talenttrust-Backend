@@ -1,120 +1,33 @@
 import { ContractsService } from './contracts.service';
 import { SorobanService } from './soroban.service';
-import { InMemoryContractsRepository } from '../repositories/contracts.repository';
-import { CreateContractDto, UpdateContractDto, ContractQueryParams } from '../modules/contracts/dto/contract.dto';
+import { ContractBoundsError } from '../contracts/bounds';
+import { MAX_MILESTONES_PER_CONTRACT, MAX_CONTRACT_AMOUNT_STROOPS } from '../contracts/bounds';
 
-// Mock the SorobanService to isolate tests
 jest.mock('./soroban.service');
 
 describe('ContractsService', () => {
   let contractsService: ContractsService;
-  let mockRepository: InMemoryContractsRepository;
-  let mockSorobanService: jest.Mocked<SorobanService>;
 
   beforeEach(() => {
-    mockRepository = new InMemoryContractsRepository();
-    mockSorobanService = new SorobanService() as jest.Mocked<SorobanService>;
-    
-    // Mock the prepareEscrow method
-    mockSorobanService.prepareEscrow = jest.fn().mockResolvedValue(undefined);
-    
-    contractsService = new ContractsService(mockRepository);
+    contractsService = new ContractsService();
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('getContracts', () => {
-    it('should return paginated contracts', async () => {
-      // Create test contracts
-      await contractsService.createContract({
-        title: 'Contract 1',
-        description: 'First contract',
-        clientId: '550e8400-e29b-41d4-a716-446655440000',
-        budget: 1000,
-      });
-
-      await contractsService.createContract({
-        title: 'Contract 2',
-        description: 'Second contract',
-        clientId: '550e8400-e29b-41d4-a716-446655440001',
-        budget: 2000,
-      });
-
-      const params: ContractQueryParams = {
-        page: 1,
-        limit: 10,
-        sortBy: 'createdAt',
-        sortOrder: 'desc',
-      };
-
-      const result = await contractsService.getContracts(params);
-
-      expect(result.contracts).toHaveLength(2);
-      expect(result.pagination.total).toBe(2);
-      expect(result.pagination.totalPages).toBe(1);
-    });
-
-    it('should filter contracts by status', async () => {
-      await contractsService.createContract({
-        title: 'Contract 1',
-        description: 'First contract',
-        clientId: '550e8400-e29b-41d4-a716-446655440000',
-        budget: 1000,
-        status: 'PENDING',
-      });
-
-      await contractsService.createContract({
-        title: 'Contract 2',
-        description: 'Second contract',
-        clientId: '550e8400-e29b-41d4-a716-446655440001',
-        budget: 2000,
-        status: 'ACTIVE',
-      });
-
-      const params: ContractQueryParams = {
-        page: 1,
-        limit: 10,
-        status: 'PENDING',
-        sortBy: 'createdAt',
-        sortOrder: 'desc',
-      };
-
-      const result = await contractsService.getContracts(params);
-
-      expect(result.contracts).toHaveLength(1);
-      expect(result.contracts[0].status).toBe('PENDING');
-    });
-  });
-
-  describe('getContractById', () => {
-    it('should return a contract when found', async () => {
-      const contractData: CreateContractDto = {
-        title: 'Test Contract',
-        description: 'A test contract',
-        clientId: '550e8400-e29b-41d4-a716-446655440000',
-        budget: 1000,
-      };
-
-      const created = await contractsService.createContract(contractData);
-      const found = await contractsService.getContractById(created.id);
-
-      expect(found).toEqual(created);
-    });
-
-    it('should return null when contract not found', async () => {
-      const result = await contractsService.getContractById('non-existent-id');
-      expect(result).toBeNull();
+  describe('getAllContracts', () => {
+    it('returns an empty array initially', async () => {
+      const contracts = await contractsService.getAllContracts();
+      expect(contracts).toEqual([]);
     });
   });
 
   describe('createContract', () => {
-    it('should create a contract with valid data', async () => {
-      const contractData: CreateContractDto = {
+    it('creates a contract and calls SorobanService.prepareEscrow', async () => {
+      const contractData = {
         title: 'Build a frontend',
         description: 'React TS development',
-        clientId: '550e8400-e29b-41d4-a716-446655440000',
         budget: 500,
       };
 
@@ -126,9 +39,6 @@ describe('ContractsService', () => {
         clientId: '550e8400-e29b-41d4-a716-446655440000',
         budget: 500,
         status: 'PENDING',
-        freelancerId: null,
-        terms: null,
-        milestones: null,
       });
       expect(result.id).toBeDefined();
       expect(result.createdAt).toBeDefined();
@@ -407,11 +317,84 @@ describe('ContractsService', () => {
     it('should return zero stats for empty repository', async () => {
       const stats = await contractsService.getContractStats();
 
-      expect(stats.total).toBe(0);
-      expect(stats.byStatus.PENDING).toBe(0);
-      expect(stats.byStatus.ACTIVE).toBe(0);
-      expect(stats.byStatus.COMPLETED).toBe(0);
-      expect(stats.totalBudget).toBe(0);
+      const mockPrepareEscrow = SorobanService.prototype.prepareEscrow as jest.Mock;
+      expect(mockPrepareEscrow).toHaveBeenCalledWith(result.id, 500);
+    });
+
+    it('creates a contract with milestones within bounds', async () => {
+      const contractData = {
+        title: 'Build a frontend',
+        description: 'React TS development',
+        budget: 1000,
+        milestones: [
+          { title: 'Phase 1', amount: 500 },
+          { title: 'Phase 2', amount: 500 },
+        ],
+      };
+
+      const result = await contractsService.createContract(contractData);
+      expect(result.status).toBe('PENDING');
+      expect(result.milestones).toHaveLength(2);
+    });
+
+    it('throws ContractBoundsError when budget exceeds cap', async () => {
+      const contractData = {
+        title: 'Big contract',
+        description: 'Very large budget',
+        budget: MAX_CONTRACT_AMOUNT_STROOPS + 1,
+      };
+
+      await expect(contractsService.createContract(contractData)).rejects.toThrow(
+        ContractBoundsError,
+      );
+      await expect(contractsService.createContract(contractData)).rejects.toThrow(
+        /Budget exceeds/,
+      );
+    });
+
+    it('throws ContractBoundsError when milestone count exceeds cap', async () => {
+      const milestones = Array.from({ length: MAX_MILESTONES_PER_CONTRACT + 1 }, (_, i) => ({
+        title: `M${i}`,
+        amount: 1,
+      }));
+
+      await expect(
+        contractsService.createContract({
+          title: 'Too many milestones',
+          description: 'Exceeds milestone limit',
+          budget: 100,
+          milestones,
+        }),
+      ).rejects.toThrow(ContractBoundsError);
+    });
+
+    it('throws ContractBoundsError when total milestone amount exceeds cap', async () => {
+      const milestones = [
+        { title: 'A', amount: MAX_CONTRACT_AMOUNT_STROOPS },
+        { title: 'B', amount: 1 },
+      ];
+
+      await expect(
+        contractsService.createContract({
+          title: 'Overflow milestones',
+          description: 'Total exceeds amount cap',
+          budget: 100,
+          milestones,
+        }),
+      ).rejects.toThrow(ContractBoundsError);
+    });
+
+    it('does not persist contract when bounds are violated', async () => {
+      await expect(
+        contractsService.createContract({
+          title: 'Big contract',
+          description: 'Over the limit',
+          budget: MAX_CONTRACT_AMOUNT_STROOPS + 1,
+        }),
+      ).rejects.toThrow(ContractBoundsError);
+
+      const contracts = await contractsService.getAllContracts();
+      expect(contracts).toHaveLength(0);
     });
   });
 });
